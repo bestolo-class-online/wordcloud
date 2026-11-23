@@ -7,7 +7,7 @@
     <style>
         /* -------------------- CSS 樣式設定 -------------------- */
         body {
-            font-family: Arial, sans-serif;
+            font-family: Arial, "Microsoft JhengHei", sans-serif;
             margin: 20px;
             background-color: #f4f4f9;
         }
@@ -116,8 +116,28 @@
                 return;
             }
 
-            const cleanedText = inputText.toLowerCase().replace(/[^a-z0-9\s]/g, '');
-            const words = cleanedText.split(/\s+/).filter(word => word.length > 0);
+            let words = [];
+
+            // 使用瀏覽器內建斷詞器（支援中文自動斷詞與英文分詞）
+            if (typeof Intl !== 'undefined' && Intl.Segmenter) {
+                const segmenter = new Intl.Segmenter('zh-TW', { granularity: 'word' });
+                for (const { segment, isWordLike } of segmenter.segment(inputText.toLowerCase())) {
+                    // isWordLike 會自動過濾掉空白與標點符號
+                    if (isWordLike) {
+                        words.push(segment);
+                    }
+                }
+            } else {
+                // 舊版瀏覽器備用方案：保留英文、數字與中文，標點符號轉為空白切分
+                const cleanedText = inputText.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff\s]/g, ' ');
+                words = cleanedText.split(/\s+/).filter(word => word.length > 0);
+            }
+
+            // 檢查過濾後是否還有有效詞彙（例如使用者只輸入了標點符號）
+            if (words.length === 0) {
+                container.innerHTML = '<p style="color: red;">找不到有效的文字內容！</p>';
+                return;
+            }
 
             const wordFrequency = {};
             words.forEach(word => {
@@ -131,10 +151,10 @@
 
         function displayWordCloud(words, frequencyMap) {
             const container = document.getElementById('word-cloud-container');
+            const maxCount = Math.max(...Object.values(frequencyMap));
             
             words.forEach(word => {
                 const count = frequencyMap[word];
-                const maxCount = Math.max(...Object.values(frequencyMap));
                 const scaleFactor = count / maxCount; 
                 const fontSize = Math.round(16 + (scaleFactor * 20)); 
                 
