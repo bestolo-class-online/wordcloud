@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>文字雲設計</title>
+    <title>多人即時文字雲</title>
     <style>
         /* -------------------- CSS 樣式設定 -------------------- */
         body {
@@ -15,6 +15,26 @@
         h1 {
             color: #333;
             text-align: center;
+        }
+
+        /* 登入狀態區塊 */
+        #auth-area {
+            background: #e9f2ff;
+            padding: 15px 20px;
+            border-radius: 8px;
+            border: 1px solid #b8d4fe;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        #user-info {
+            font-size: 15px;
+            color: #004085;
+            font-weight: bold;
         }
 
         /* 1. 輸入區塊樣式 */
@@ -30,13 +50,18 @@
 
         #text-input {
             width: 100%;
-            min-height: 100px;
+            min-height: 90px;
             padding: 10px;
             border: 1px solid #ccc;
             border-radius: 4px;
             box-sizing: border-box;
             resize: vertical;
             font-size: 16px;
+        }
+
+        #text-input:disabled {
+            background-color: #f0f0f0;
+            cursor: not-allowed;
         }
 
         .options-area {
@@ -64,25 +89,56 @@
             border: none;
             border-radius: 4px;
             cursor: pointer;
-            font-size: 16px;
+            font-size: 15px;
             transition: background-color 0.2s;
         }
 
-        button:hover {
+        button:hover:not(:disabled) {
             background-color: #0056b3;
+        }
+
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+
+        #login-btn {
+            background-color: #db4437;
+        }
+
+        #login-btn:hover {
+            background-color: #b53429;
+        }
+
+        #logout-btn {
+            background-color: #6c757d;
+        }
+
+        #logout-btn:hover {
+            background-color: #545b62;
         }
 
         #download-btn {
             background-color: #28a745;
         }
 
-        #download-btn:hover {
+        #download-btn:hover:not(:disabled) {
             background-color: #1e7e34;
         }
 
-        #download-btn:disabled {
-            background-color: #cccccc;
-            cursor: not-allowed;
+        #clear-btn {
+            background-color: #dc3545;
+            display: none; /* 僅管理員登入時顯示 */
+        }
+
+        #clear-btn:hover {
+            background-color: #bd2130;
+        }
+
+        #status-msg {
+            margin-top: 10px;
+            font-size: 14px;
+            font-weight: bold;
         }
 
         /* 2. 輸出區塊樣式 */
@@ -99,7 +155,7 @@
             min-height: 140px;
             width: 100%;
             box-sizing: border-box;
-            overflow: hidden; /* 隱藏超出範圍的文字以呈現跑馬燈 */
+            overflow: hidden;
             position: relative;
             background-color: #fafafa;
             border: 1px dashed #ddd;
@@ -111,23 +167,18 @@
         .marquee-track {
             display: inline-block;
             white-space: nowrap;
-            padding-left: 100%; /* 從容器最右側開始進入 */
+            padding-left: 100%;
             animation: marqueeScroll 18s linear infinite;
             text-align: left;
         }
 
-        /* 滑鼠移到跑馬燈上時暫停，方便閱讀 */
         .marquee-track:hover {
             animation-play-state: paused;
         }
 
         @keyframes marqueeScroll {
-            0% {
-                transform: translateX(0);
-            }
-            100% {
-                transform: translateX(-100%);
-            }
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-100%); }
         }
 
         .word-item {
@@ -148,118 +199,263 @@
 </head>
 <body>
 
-    <h1>✨ 文字雲設計 ✨</h1>
-    <p>請在下方輸入一段您想分析的文字。</p>
+    <h1>✨ 線上多人即時文字雲 ✨</h1>
+
+    <!-- 登入與身分驗證區塊 -->
+    <div id="auth-area">
+        <span id="user-info">🔒 請先使用 Google 帳號登入，才能填寫文字（防止亂填）</span>
+        <div>
+            <button id="login-btn">使用 Google 帳號登入</button>
+            <button id="logout-btn" style="display: none;">登出</button>
+        </div>
+    </div>
 
     <!-- 頁面上方：輸入區塊 -->
     <div id="input-area">
-        <h2>📝 輸入文字</h2>
-        <textarea id="text-input" placeholder="請在這裡輸入您的長文... 例如：程式設計、前端開發、JavaScript、HTML、CSS、文字雲..."></textarea>
+        <h2>📝 貢獻您的關鍵字</h2>
+        <textarea id="text-input" placeholder="請先登入後再輸入文字... 例如：程式設計、前端開發、文字雲" disabled></textarea>
         
         <div class="options-area">
             <strong>分詞方式：</strong>
             <label>
                 <input type="radio" name="split-mode" value="delimiter" checked>
-                依標點／空白分隔（保留完整詞彙，超過 2 字不會拆開）
+                依標點／空白分隔（保留完整詞彙）
             </label>
             <label>
                 <input type="radio" name="split-mode" value="auto">
-                自動斷詞（適合整篇長文章）
+                自動斷詞（適合整段句子）
             </label>
         </div>
 
         <div class="button-group">
-            <button onclick="generateWordCloud()">生成文字雲</button>
-            <button id="download-btn" onclick="downloadWordCloud()" disabled>下載內容 (PNG)</button>
+            <button id="submit-btn" disabled>送出並累加到文字雲</button>
+            <button id="download-btn" disabled>下載內容 (PNG)</button>
+            <button id="clear-btn">管理員：清空所有文字雲</button>
         </div>
+        <div id="status-msg"></div>
     </div>
 
     <!-- 頁面下方：輸出區塊 -->
     <div id="output-area">
-        <h2>☁️ 生成結果（跑馬燈模式）</h2>
+        <h2>☁️ 即時生成結果（跑馬燈同步模式）</h2>
         <div id="word-cloud-container">
-            <p id="initial-message">輸入文字並點擊「生成文字雲」即可查看結果。</p>
+            <p id="initial-message">連線雲端資料庫中，請稍候...</p>
         </div>
     </div>
 
-    <script>
-        // -------------------- JavaScript 邏輯 --------------------
+    <!-- 使用 Firebase 模組化 SDK (ES Module) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+        import { 
+            getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged 
+        } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+        import { 
+            getFirestore, collection, doc, increment, onSnapshot, query, orderBy, getDocs, writeBatch, serverTimestamp 
+        } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
-        // 用來儲存目前生成的文字雲資料（供下載 PNG 使用）
+        // =========================================================
+        // 【步驟 1】請將下方替換成你自己的 Firebase 設定碼
+        // =========================================================
+        const firebaseConfig = {
+           apiKey: "AIzaSyBZC7Fnh8hYBzYvlkJSsRHA-MT6Au4ofhY",
+    authDomain: "wordcloud-a553c.firebaseapp.com",
+    projectId: "wordcloud-a553c",
+    storageBucket: "wordcloud-a553c.firebasestorage.app",
+    messagingSenderId: "515791217597",
+    appId: "1:515791217597:web:9b7c39aac0520e980928d4",
+        };
+
+        // 【步驟 2】請填入你的 Gmail，登入該帳號時會出現「清空文字雲」按鈕
+        const ADMIN_EMAIL = "你的管理員Gmail@gmail.com";
+
+        // =========================================================
+
+        // 初始化 Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const provider = new GoogleAuthProvider();
+
+        // 取得頁面元素
+        const loginBtn = document.getElementById('login-btn');
+        const logoutBtn = document.getElementById('logout-btn');
+        const userInfo = document.getElementById('user-info');
+        const textInput = document.getElementById('text-input');
+        const submitBtn = document.getElementById('submit-btn');
+        const downloadBtn = document.getElementById('download-btn');
+        const clearBtn = document.getElementById('clear-btn');
+        const statusMsg = document.getElementById('status-msg');
+        const container = document.getElementById('word-cloud-container');
+
+        let currentUser = null;
         let currentWordData = [];
 
-        function generateWordCloud() {
-            const inputText = document.getElementById('text-input').value;
-            const container = document.getElementById('word-cloud-container');
-            const downloadBtn = document.getElementById('download-btn');
-            const splitMode = document.querySelector('input[name="split-mode"]:checked').value;
-            
-            container.innerHTML = '';
-            currentWordData = [];
-            downloadBtn.disabled = true;
-            
-            if (!inputText.trim()) {
-                container.innerHTML = '<p style="color: red;">請先輸入文字！</p>';
+        // -------------------- 1. 登入／登出控制 --------------------
+        loginBtn.addEventListener('click', async () => {
+            try {
+                await signInWithPopup(auth, provider);
+            } catch (error) {
+                console.error("登入失敗:", error);
+                alert("登入失敗：" + error.message);
+            }
+        });
+
+        logoutBtn.addEventListener('click', async () => {
+            await signOut(auth);
+        });
+
+        onAuthStateChanged(auth, (user) => {
+            currentUser = user;
+            if (user) {
+                userInfo.textContent = `✅ 已登入：${user.displayName} (${user.email})`;
+                loginBtn.style.display = 'none';
+                logoutBtn.style.display = 'inline-block';
+                textInput.disabled = false;
+                textInput.placeholder = "請在這裡輸入您想加入的詞彙... 例如：程式設計、前端開發、文字雲";
+                submitBtn.disabled = false;
+
+                // 若為管理員，顯示清空按鈕
+                clearBtn.style.display = (user.email === ADMIN_EMAIL) ? 'inline-block' : 'none';
+            } else {
+                userInfo.textContent = "🔒 請先使用 Google 帳號登入，才能填寫文字（防止亂填）";
+                loginBtn.style.display = 'inline-block';
+                logoutBtn.style.display = 'none';
+                textInput.disabled = true;
+                textInput.placeholder = "請先登入後再輸入文字...";
+                submitBtn.disabled = true;
+                clearBtn.style.display = 'none';
+            }
+        });
+
+        // -------------------- 2. 送出文字並累加到雲端 --------------------
+        submitBtn.addEventListener('click', async () => {
+            if (!currentUser) {
+                alert("請先登入！");
                 return;
             }
 
+            const inputText = textInput.value;
+            if (!inputText.trim()) {
+                showStatus("請先輸入文字！", "red");
+                return;
+            }
+
+            const splitMode = document.querySelector('input[name="split-mode"]:checked').value;
             let words = [];
 
             if (splitMode === 'auto' && typeof Intl !== 'undefined' && Intl.Segmenter) {
-                // 自動斷詞（會依中文語意拆分成常見詞彙）
                 const segmenter = new Intl.Segmenter('zh-TW', { granularity: 'word' });
                 for (const { segment, isWordLike } of segmenter.segment(inputText.toLowerCase())) {
-                    if (isWordLike) {
-                        words.push(segment);
-                    }
+                    if (isWordLike) words.push(segment);
                 }
             } else {
-                // 依標點符號與空白切分（完整保留使用者的詞彙）
                 const cleanedText = inputText.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff\s]/g, ' ');
                 words = cleanedText.split(/\s+/).filter(word => word.length > 0);
             }
 
+            // 過濾過長單字並限制單次送出詞數（防洗版保護）
+            words = words.filter(w => w.length <= 25);
             if (words.length === 0) {
-                container.innerHTML = '<p style="color: red;">找不到有效的文字內容！</p>';
+                showStatus("找不到有效的文字內容（單詞不可超過 25 字）！", "red");
                 return;
             }
 
-            const wordFrequency = {};
-            words.forEach(word => {
-                wordFrequency[word] = (wordFrequency[word] || 0) + 1;
+            // 計算本次輸入的詞頻
+            const wordFreq = {};
+            words.forEach(w => {
+                wordFreq[w] = (wordFreq[w] || 0) + 1;
             });
 
-            const sortedWords = Object.keys(wordFrequency).sort((a, b) => wordFrequency[b] - wordFrequency[a]);
+            const uniqueWords = Object.keys(wordFreq);
+            if (uniqueWords.length > 20) {
+                showStatus("一次最多只能送出 20 個不同的詞彙喔！", "red");
+                return;
+            }
 
-            displayWordCloud(sortedWords, wordFrequency);
-            downloadBtn.disabled = false;
+            submitBtn.disabled = true;
+            showStatus("傳送中...", "#007bff");
+
+            try {
+                // 使用批次寫入，將每個詞的次數累加 (increment) 到 Firestore
+                const batch = writeBatch(db);
+                uniqueWords.forEach(word => {
+                    // Firestore 文件 ID 不能包含 '/'，前方的正則已過濾，此處再做保險處理
+                    const safeDocId = word.replace(/\//g, '');
+                    if (!safeDocId) return;
+
+                    const docRef = doc(db, 'words', safeDocId);
+                    batch.set(docRef, {
+                        text: safeDocId,
+                        count: increment(wordFreq[word]),
+                        updatedAt: serverTimestamp(),
+                        lastUpdatedBy: currentUser.email // 記錄最後填寫者，方便稽核
+                    }, { merge: true });
+                });
+
+                await batch.commit();
+                textInput.value = '';
+                showStatus(`已成功將 ${uniqueWords.length} 個詞彙加入文字雲！`, "#28a745");
+            } catch (error) {
+                console.error("寫入失敗:", error);
+                showStatus("送出失敗，請檢查網路或資料庫權限設定。", "red");
+            } finally {
+                submitBtn.disabled = false;
+            }
+        });
+
+        function showStatus(msg, color) {
+            statusMsg.textContent = msg;
+            statusMsg.style.color = color;
+            setTimeout(() => {
+                if (statusMsg.textContent === msg) statusMsg.textContent = '';
+            }, 4000);
         }
 
-        function displayWordCloud(words, frequencyMap) {
-            const container = document.getElementById('word-cloud-container');
-            const maxCount = Math.max(...Object.values(frequencyMap));
+        // -------------------- 3. 即時監聽資料庫並更新跑馬燈 --------------------
+        const wordsQuery = query(collection(db, 'words'), orderBy('count', 'desc'));
 
-            // 建立跑馬燈軌道
+        onSnapshot(wordsQuery, (snapshot) => {
+            container.innerHTML = '';
+            currentWordData = [];
+
+            if (snapshot.empty) {
+                container.innerHTML = '<p id="initial-message">目前還沒有任何詞彙，快登入並成為第一個填寫的人吧！</p>';
+                downloadBtn.disabled = true;
+                return;
+            }
+
+            const items = [];
+            snapshot.forEach((docSnap) => {
+                const data = docSnap.data();
+                if (data.text && data.count > 0) {
+                    items.push({ word: data.text, count: data.count });
+                }
+            });
+
+            if (items.length === 0) {
+                downloadBtn.disabled = true;
+                return;
+            }
+
+            const maxCount = Math.max(...items.map(i => i.count));
             const marqueeTrack = document.createElement('div');
             marqueeTrack.className = 'marquee-track';
 
-            // 根據字詞數量動態調整跑馬燈速度（最少 12 秒，字多時放慢以免太快）
-            const duration = Math.max(12, words.length * 1.8);
+            const duration = Math.max(12, items.length * 1.8);
             marqueeTrack.style.animationDuration = `${duration}s`;
 
-            words.forEach(word => {
-                const count = frequencyMap[word];
+            items.forEach(({ word, count }) => {
                 const scaleFactor = count / maxCount;
                 const fontSize = Math.round(18 + (scaleFactor * 22));
 
-                // 儲存資料給下載 PNG 使用
                 currentWordData.push({ word, fontSize });
 
                 const wordElement = document.createElement('span');
                 wordElement.className = 'word-item';
                 wordElement.style.fontSize = `${fontSize}px`;
+                wordElement.title = `出現次數：${count}`; // 滑鼠移上去可看次數
 
-                // 將首字與其餘文字拆開，讓首字可以單獨放大
+                // 首字放大
                 const chars = Array.from(word);
                 const firstSpan = document.createElement('span');
                 firstSpan.className = 'first-char';
@@ -276,12 +472,35 @@
             });
 
             container.appendChild(marqueeTrack);
-        }
+            downloadBtn.disabled = false;
+        }, (error) => {
+            console.error("讀取失敗:", error);
+            container.innerHTML = '<p style="color: red;">無法連線到資料庫，請確認 Firebase 設定與權限規則是否正確。</p>';
+        });
 
-        // 將文字雲繪製到隱藏的 Canvas 並下載為 PNG
-        function downloadWordCloud() {
+        // -------------------- 4. 管理員清空資料功能 --------------------
+        clearBtn.addEventListener('click', async () => {
+            if (!currentUser || currentUser.email !== ADMIN_EMAIL) return;
+            if (!confirm("⚠️ 確定要清空雲端所有的文字雲資料嗎？此動作無法復原！")) return;
+
+            try {
+                const snapshot = await getDocs(collection(db, 'words'));
+                const batch = writeBatch(db);
+                snapshot.forEach((docSnap) => {
+                    batch.delete(docSnap.ref);
+                });
+                await batch.commit();
+                showStatus("已清空所有文字雲資料！", "#dc3545");
+            } catch (error) {
+                console.error("清空失敗:", error);
+                alert("清空失敗：" + error.message);
+            }
+        });
+
+        // -------------------- 5. 下載內容為 PNG --------------------
+        downloadBtn.addEventListener('click', () => {
             if (currentWordData.length === 0) {
-                alert('請先生成文字雲再下載！');
+                alert('目前沒有文字雲可以下載！');
                 return;
             }
 
@@ -294,7 +513,6 @@
             const maxLineWidth = canvasWidth - padding * 2;
             const fontFamily = 'Arial, "Microsoft JhengHei", sans-serif';
 
-            // 先計算每個詞的寬度與換行排版
             const lines = [];
             let currentLine = { items: [], totalWidth: 0, maxFirstFontSize: 0 };
 
@@ -333,7 +551,6 @@
                 lines.push(currentLine);
             }
 
-            // 計算畫布總高度
             let totalHeight = padding * 2;
             lines.forEach(line => {
                 totalHeight += line.maxFirstFontSize * 1.6;
@@ -343,11 +560,9 @@
             canvas.width = canvasWidth;
             canvas.height = totalHeight;
 
-            // 繪製白色背景
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // 繪製文字（每行置中對齊，首字放大且基線對齊）
             ctx.fillStyle = '#28a745';
             ctx.textBaseline = 'alphabetic';
 
@@ -356,15 +571,12 @@
                 const lineHeight = line.maxFirstFontSize * 1.6;
                 currentY += line.maxFirstFontSize * 1.15;
 
-                // 讓每一行水平置中
                 let currentX = (canvasWidth - line.totalWidth) / 2;
 
                 line.items.forEach(item => {
-                    // 畫首字（放大 1.35 倍）
                     ctx.font = `bold ${item.firstFontSize}px ${fontFamily}`;
                     ctx.fillText(item.firstChar, currentX, currentY);
 
-                    // 畫其餘文字
                     if (item.restChars) {
                         ctx.font = `bold ${item.fontSize}px ${fontFamily}`;
                         ctx.fillText(item.restChars, currentX + item.firstWidth, currentY);
@@ -376,12 +588,11 @@
                 currentY += lineHeight - line.maxFirstFontSize * 1.15;
             });
 
-            // 觸發 PNG 下載
             const link = document.createElement('a');
             link.download = 'wordcloud.png';
             link.href = canvas.toDataURL('image/png');
             link.click();
-        }
+        });
     </script>
 </body>
 </html>
